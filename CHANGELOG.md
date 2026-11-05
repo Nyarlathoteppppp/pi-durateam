@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix: the status line's wrap mode no longer crashes with an unhandled EPIPE when the wrapped command exits without reading stdin (#2); the line still renders.
+
 - Security: delegates now apply Pi's project trust, ignoring an untrusted project's `.pi/mcp.json` and `.pi/settings.json`. Previously an untrusted repo's `.pi/mcp.json` could replace a selected server's command.
 
 - Fix: `nativeMcp` also refuses grants of only tools hidden in `mcp.json`, including resource tools when every selected server is hidden. Stored jobs are not re-checked.

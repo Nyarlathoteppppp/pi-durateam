@@ -65,4 +65,7 @@ child.on("close", () => {
   if (pi) lines.push(pi);
   process.stdout.write(`${lines.join("\n")}\n`);
 });
+// A wrapped command that exits without reading stdin fails this write with EPIPE; the close
+// handler still renders what it printed.
+child.stdin.on("error", () => {});
 child.stdin.end(raw);
