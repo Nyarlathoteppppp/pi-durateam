@@ -32,7 +32,7 @@
 
 ## 快速开始
 
-**需要 macOS 或 Linux、Node.js 22.19+ 和 Pi。** CI 在 Node.js 22 和 24 上测试 Pi 1.0.0、1.0.4、1.1.0 和 1.3.0。模型调用使用你自己的 provider 凭据。
+**需要 macOS 或 Linux、Node.js 22.19+ 和 Pi。** CI 在 Node.js 22 和 24 上测试 Pi 1.0.0、1.0.4、1.1.0、1.3.0 和 1.4.0。模型调用使用你自己的 provider 凭据。
 
 **1 · 安装 Pi**（已安装可跳过）并登录一个 provider：
 

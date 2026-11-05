@@ -247,6 +247,25 @@ try {
   assert.deepEqual([entry.model, entry.thinking], ["up/m1", "low"], "a wait observation moves the index to the fallback");
   const report = await call(switched, "delegate_get", { sessionId: "fell-back" });
   assert.deepEqual([report.model, report.thinking], ["up/m1", "low"], "delegate_get names the model that answered");
+
+  // A failed/stopped child may have useful findings even though its final answer is empty.
+  // Read the full report without a preceding wait: the coordinator must not lose that evidence.
+  for (const state of ["error", "aborted"]) {
+    const partial = snapshot(`partial-${state}`, { state, lastText: "", salvagedText: "src/auth.ts:42: missing check",
+      ...(state === "error" ? { error: "provider disconnected" }
+        : { termination: { reason: "deadline", at: new Date().toISOString() } }) });
+    const interrupted = createCoordinatorTools(plan(undefined, 1), dir, {
+      startBatch: async () => batch([{ index: 0, sessionId: partial.sessionId, state: "running" }]),
+      getState: async () => partial,
+    });
+    await call(interrupted, "delegate_start_batch");
+    const result = await call(interrupted, "delegate_get", { sessionId: partial.sessionId });
+    assert.equal(result.salvagedText, partial.salvagedText, `${state} findings remain readable`);
+    assert.equal(result.state, state, "partial evidence is not a successful completion");
+    assert.equal(result.lastText, "", "partial evidence stays distinct from the final answer");
+    assert.equal(result.error, partial.error);
+    assert.deepEqual(result.termination, partial.termination);
+  }
   console.log("  OK -> coordinator report snapshots: partial failures, observed report versions, parallel merge, team isolation, nonfatal IO, opt-in only");
 } finally {
   await rm(dir, { recursive: true, force: true });

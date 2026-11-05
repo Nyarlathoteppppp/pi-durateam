@@ -116,7 +116,9 @@ external MCP tools are not wrapped by Pi's built-in secret-file guard.
   termination, save diagnostics and `nextAction`; it does not repeat report bodies.
 - `delegate_get({sessionId})`: full report and result metadata for a child launched
   by this coordinator, including text omitted from normal saved-result responses,
-  `nextAction`, remaining turns and follow-up readiness.
+  `nextAction`, remaining turns and follow-up readiness. An interrupted child may return
+  `salvagedText`: findings written before it stopped, not a completed report; inspect `state`,
+  `error` and `termination` before using them.
 - `delegate_follow_up({sessionId, prompt, maxTurns?, maxToolCalls?})`: ask a finished
   child for a missing conclusion or verify a specific claim. Same history, model and
   tool grants; omitted budgets keep remaining quotas, explicit fields renew only

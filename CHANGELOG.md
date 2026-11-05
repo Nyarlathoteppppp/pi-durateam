@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix: coordinator `delegate_get` retains `salvagedText` from failed or aborted children, so reading their report does not drop findings written before interruption. Their failure state remains unchanged.
 - Fix: durable sessions restore the checkpoint's model and thinking level after a provider fallback, including completed-history follow-ups and crash recovery. Reloading previously retried the original failed provider and reset the thinking level.
 - CI: add Pi 1.4.0 alongside the legacy SDK matrix.
 
