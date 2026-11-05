@@ -90,6 +90,9 @@ preserve these SDK ordering contracts; see `recovery.mjs` and `native-recovery.m
   Keep `suspended` separate from `recordingStopped`: in-flight results must still be saved.
 - Recovery rebuilds the transcript from saved entries and staged results. Missing results become
   unknown-outcome messages: external effects may already have happened, so never blindly replay the call.
+  The checkpoint's model and thinking level override the catalog's initial launch settings before
+  SDK session creation; a provider fallback survives both history reload and crash recovery.
+  That model still passes the current model policy and, if execution continues, authentication.
   A committed answer or exhausted budget can finish recovery without provider authentication.
   An assistant message ending in `stop` or `length` with no pending steering is already an answer;
   recovery records `length` as `done` with `answerState: partial`, without another model request.

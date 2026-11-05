@@ -266,10 +266,14 @@ export class PiWorker {
 
   async start(prompt: string, saved?: Checkpoint, key?: string, seedEntries?: FileEntry[]): Promise<this> {
     validateNativeMcp(this.options, this.cwd);
-    const model = await resolveModel(this.modelSpec, this.cwd);
+    // The catalog keeps the initial launch options; a provider fallback is committed in
+    // the checkpoint. Restore that model before building the SDK session or checking auth.
+    const modelRef = saved?.snapshot.model ?? this.modelSpec;
+    const thinking = saved?.snapshot.thinking ?? this.thinkingSpec;
+    const model = await resolveModel(modelRef, this.cwd);
     if (this.isStopped()) return this;
 
-    assertThinkingSupported(model, this.thinkingSpec);
+    assertThinkingSupported(model, thinking);
 
     const selectedResources = this.preparedResources ?? await prepareResources(this.options.resources, this.cwd, this.toolNames);
     this.preparedResources = undefined;
@@ -279,7 +283,7 @@ export class PiWorker {
     const resources = await loadResources(spec);
     if (this.isStopped()) return this;
 
-    const session = await createSession(spec, resources, { model, thinking: this.thinkingSpec, saved, seedEntries });
+    const session = await createSession(spec, resources, { model, thinking, saved, seedEntries });
     this.session = session;
     if (TOOL_CHOICE_NONE.length) this.forbidToolsWhenRemoved(session);
     if (DEADLINE_GRACE_MS > 0) this.blockToolsPastDeadline(session);
@@ -294,7 +298,7 @@ export class PiWorker {
       // SDK defaults must obey the same delegate policy as an explicit model.
       try {
         await resolveModel(`${chosen.provider}/${chosen.id}`, this.cwd);
-        assertThinkingSupported(chosen, this.thinkingSpec);
+        assertThinkingSupported(chosen, thinking);
       } catch (error) { session.dispose(); throw error; }
     }
     this.model = chosen ? `${chosen.provider}/${chosen.id}` : "(pi default)";

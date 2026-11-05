@@ -16,6 +16,8 @@ assert.deepEqual(parseFallback("antigravity/gemini-*"), { pattern: "antigravity/
 // first fallback model of another provider; the caller's session id and wait do not change.
 const dir = await mkdtemp(join(tmpdir(), "pi-delegate-fallback-"));
 const seen = [];
+let holdNextUp = false;
+const heldUp = Promise.withResolvers();
 const server = (name, healthy) => createServer(async (req, res) => {
   let body = "";
   for await (const chunk of req) body += chunk;
@@ -23,6 +25,7 @@ const server = (name, healthy) => createServer(async (req, res) => {
   seen.push({ provider: name, messages: request.messages.length, tools: request.tools?.length ?? 0,
     text: JSON.stringify(request.messages.findLast((m) => m.role === "user")?.content) });
   if (!healthy) { res.writeHead(503, { "Content-Type": "application/json" }); return res.end('{"error":{"message":"gateway down"}}'); }
+  if (holdNextUp) { holdNextUp = false; heldUp.resolve(); return; }
   res.writeHead(200, { "Content-Type": "text/event-stream" });
   const emit = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: "f", object: "chat.completion.chunk",
     created: 1, model: request.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
@@ -39,15 +42,18 @@ const provider = (name) => ({ baseUrl: `http://127.0.0.1:${servers[name].address
 const clients = [];
 const connect = async (env = {}) => {
   const client = new Client({ name: "fallback", version: "1" });
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: ["dist/index.js"], stderr: "ignore",
+  const transport = new StdioClientTransport({ command: process.execPath, args: ["dist/index.js"], stderr: "ignore",
     env: { ...process.env, PI_OFFLINE: "1", PI_CODING_AGENT_DIR: join(dir, "agent"), PI_DELEGATE_STATE_DIR: join(dir, "state"),
-      PI_DELEGATE_IGNORE_SCOPE: "1", PI_DELEGATE_STALL_MS: "0", ...env } }));
+      PI_DELEGATE_IGNORE_SCOPE: "1", PI_DELEGATE_STALL_MS: "0", ...env } });
+  await client.connect(transport);
   clients.push(client);
-  return async (name, args) => {
+  const call = async (name, args) => {
     const result = await client.callTool({ name, arguments: args });
     assert.ok(!result.isError, result.content?.[0]?.text);
     return JSON.parse(result.content[0].text);
   };
+  call.pid = transport.pid;
+  return call;
 };
 try {
   const agentDir = join(dir, "agent");
@@ -128,6 +134,37 @@ try {
   const init = await call("init", { cwd: dir });
   assert.deepEqual(init.models.fallbackOnProviderError, [{ pattern: "down/m2", now: "down/m2" },
     { pattern: "alsodown/*", now: "alsodown/m1" }, { pattern: "up/*", now: "up/m1" }]);
+
+  // 10. A new host continues a durable session on the model/level that actually answered.
+  const persisted = await call("run", { cwd: dir, id: "durable-fallback", durable: true,
+    model: "down/m1", thinking: "medium", prompt: "hello", tools: [], maxTurns: 6,
+    fallbackModels: ["up/*:low"] });
+  assert.deepEqual([persisted.model, persisted.thinking], ["up/m1", "low"]);
+  await clients[0].close();
+  const resumed = await connect();
+  seen.length = 0;
+  await resumed("follow_up", { sessionId: "durable-fallback", prompt: "Continue on the healthy provider" });
+  const followed = await resumed("wait", { sessionId: "durable-fallback", until: "settled" });
+  assert.equal(followed.state, "done", followed.error);
+  assert.deepEqual(seen.map((s) => s.provider), ["up"], "reloading must not retry the original failed provider");
+  assert.deepEqual([followed.model, followed.thinking], ["up/m1", "low"]);
+
+  // An interrupted run also restores its fallback before the recovery request, not just after done.
+  holdNextUp = true;
+  await resumed("spawn", { cwd: dir, id: "crash-fallback", durable: true,
+    model: "down/m1", thinking: "medium", prompt: "recover this", tools: [], maxTurns: 6,
+    fallbackModels: ["up/*:low"] });
+  await Promise.race([heldUp.promise, new Promise((_, reject) => {
+    setTimeout(() => reject(new Error("fallback request never arrived")), 15000).unref();
+  })]);
+  process.kill(resumed.pid, "SIGKILL");
+  await clients.at(-1).close();
+  seen.length = 0;
+  const recoveredHost = await connect();
+  const recovered = await recoveredHost("wait", { sessionId: "crash-fallback", until: "settled" });
+  assert.equal(recovered.state, "done", recovered.error);
+  assert.deepEqual(seen.map((s) => s.provider), ["up"], "crash recovery stays on the checkpoint's provider");
+  assert.deepEqual([recovered.model, recovered.thinking], ["up/m1", "low"]);
   console.log("  OK -> provider failures continue on the next fallback model of another provider, in the same session");
 } finally {
   for (const client of clients) await client.close().catch(() => {});

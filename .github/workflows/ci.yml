@@ -16,7 +16,7 @@ jobs:
       matrix:
         node: ["22", "24"]
         # Cover legacy SDKs as well as the current release; the bridge links this global install.
-        pi: ["1.0.0", "1.0.4", "1.1.0", "1.3.0"]
+        pi: ["1.0.0", "1.0.4", "1.1.0", "1.3.0", "1.4.0"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fix: durable sessions restore the checkpoint's model and thinking level after a provider fallback, including completed-history follow-ups and crash recovery. Reloading previously retried the original failed provider and reset the thinking level.
+- CI: add Pi 1.4.0 alongside the legacy SDK matrix.
+
 - Fix: the status line's wrap mode no longer crashes with an unhandled EPIPE when the wrapped command exits without reading stdin (#2); the line still renders.
 
 - Security: delegates now apply Pi's project trust, ignoring an untrusted project's `.pi/mcp.json` and `.pi/settings.json`. Previously an untrusted repo's `.pi/mcp.json` could replace a selected server's command.
